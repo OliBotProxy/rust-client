@@ -1,0 +1,38 @@
+[package]
+name = "tunnel-client"
+version = "0.9.3"
+edition = "2024"
+description = "Tunnel client for oli.bot — expose local backends through a reverse proxy tunnel"
+homepage = "https://oli.bot"
+repository = "https://github.com/OliBotProxy/rust-client"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "tunnel-client"
+path = "src/main.rs"
+
+[dependencies]
+bytes        = "1.11.1"
+clap         = { version = "4.6", features = ["std", "cargo", "wrap_help"] }
+http-body-util = "0.1.3"
+hyper        = { version = "1.9.0", default-features = false, features = ["client", "http1"] }
+hyper-rustls = { version = "0.27.9", default-features = false, features = ["ring", "http1", "http2", "webpki-roots"] }
+hyper-util   = { version = "0.1.20", features = ["full"] }
+rustls       = { version = "0.23.38", default-features = false, features = ["ring"] }
+tokio        = { version = "1.52.0", default-features = false, features = ["net", "rt-multi-thread", "time", "sync", "macros", "io-util"] }
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring"] }
+tracing      = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+webpki-roots = "1.0.4"
+
+[target.'cfg(not(target_os = "illumos"))'.dependencies]
+mimalloc = { version = "0.1.48", default-features = false }
+
+[profile.release]
+codegen-units = 1
+incremental   = false
+lto           = "fat"
+opt-level     = 3
+panic         = "abort"
+strip         = true
