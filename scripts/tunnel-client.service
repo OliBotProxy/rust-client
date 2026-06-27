@@ -1,0 +1,17 @@
+[Unit]
+Description=Oli.bot Tunnel Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/tunnel-client/env
+ExecStart=/usr/local/bin/tunnel-client \
+  --api-url $TUNNEL_API_URL \
+  --tunnel-id $TUNNEL_ID \
+  --api-key $TUNNEL_API_KEY
+Restart=always
+RestartSec=10
+User=nobody
+
+[Install]
+WantedBy=multi-user.target

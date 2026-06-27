@@ -1,0 +1,255 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g. v0.9.3)"
+        required: false
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── Build Linux musl binaries ─────────────────────────────────────
+  build:
+    name: Build (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            arch: amd64
+          - target: aarch64-unknown-linux-musl
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.target }}-
+
+      - name: Install cross
+        run: cargo install cross --locked
+
+      - name: Build
+        run: cross build --bin tunnel-client --target ${{ matrix.target }} --release
+
+      - name: Strip binary
+        run: strip --strip-all target/${{ matrix.target }}/release/tunnel-client 2>/dev/null || true
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.arch }}
+          path: target/${{ matrix.target }}/release/tunnel-client
+
+  # ── Package .deb and .rpm ─────────────────────────────────────────
+  package:
+    name: Package (${{ matrix.arch }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+          - arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: ver
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "num=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ matrix.arch }}
+          path: bin/
+
+      - name: Install fpm
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ruby ruby-dev rpm
+          sudo gem install fpm --no-document
+
+      - name: Create packages
+        run: |
+          chmod 755 bin/tunnel-client
+          chmod +x scripts/postinst-tunnel-client.sh scripts/prerm-tunnel-client.sh
+
+          ARCH=${{ matrix.arch }}
+          VER=${{ steps.ver.outputs.num }}
+          DESC="Oli.bot tunnel client — expose local backends through a secure reverse-proxy tunnel"
+
+          mkdir -p pkg/usr/local/bin pkg/lib/systemd/system
+          cp bin/tunnel-client               pkg/usr/local/bin/
+          cp scripts/tunnel-client.service   pkg/lib/systemd/system/
+
+          # .deb
+          fpm -s dir -t deb \
+            -n tunnel-client -v "$VER" \
+            --architecture "$ARCH" \
+            --depends ca-certificates \
+            --maintainer "Oli.bot <info@oli.bot>" \
+            --description "$DESC" \
+            --after-install  scripts/postinst-tunnel-client.sh \
+            --before-remove  scripts/prerm-tunnel-client.sh \
+            -p "tunnel-client_${VER}_${ARCH}.deb" \
+            -C pkg \
+            usr/local/bin/tunnel-client \
+            lib/systemd/system/tunnel-client.service
+
+          # .rpm  (fpm maps amd64 → x86_64, arm64 → aarch64 automatically)
+          fpm -s dir -t rpm \
+            -n tunnel-client -v "$VER" \
+            --architecture "$ARCH" \
+            --depends ca-certificates \
+            --maintainer "Oli.bot <info@oli.bot>" \
+            --description "$DESC" \
+            --after-install  scripts/postinst-tunnel-client.sh \
+            --before-remove  scripts/prerm-tunnel-client.sh \
+            -p "tunnel-client-${VER}-1.${ARCH}.rpm" \
+            -C pkg \
+            usr/local/bin/tunnel-client \
+            lib/systemd/system/tunnel-client.service
+
+          ls -lh *.deb *.rpm
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: |
+            *.deb
+            *.rpm
+
+  # ── Create GitHub Release ─────────────────────────────────────────
+  release:
+    name: GitHub Release
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Get version
+        id: ver
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          merge-multiple: true
+          path: release/
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          merge-multiple: false
+          path: binaries/
+
+      - name: Rename raw binaries for release
+        run: |
+          mkdir -p release
+          mv binaries/binary-amd64/tunnel-client release/tunnel-client-linux-amd64 2>/dev/null || true
+          mv binaries/binary-arm64/tunnel-client release/tunnel-client-linux-arm64 2>/dev/null || true
+          ls -lh release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Release ${{ steps.ver.outputs.tag }}
+          draft: true
+          generate_release_notes: true
+          files: release/*
+
+  # ── Publish to Google Artifact Registry ──────────────────────────
+  publish-gar:
+    name: Publish to Google Artifact Registry
+    needs: package
+    runs-on: ubuntu-latest
+    # Skip if GCP credentials not configured
+    if: ${{ secrets.GCP_SA_KEY != '' }}
+    env:
+      PROJECT: proxyconfig-71f70
+      LOCATION: us-central1
+    steps:
+      - name: Get version
+        id: ver
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "num=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          merge-multiple: true
+          path: pkgs/
+
+      - name: Push .deb packages
+        run: |
+          VER=${{ steps.ver.outputs.num }}
+          for arch in amd64 arm64; do
+            DEB="pkgs/tunnel-client_${VER}_${arch}.deb"
+            echo "Uploading ${DEB}..."
+            gcloud artifacts apt upload tunnel-client-apt \
+              --location="$LOCATION" \
+              --source="$DEB"
+          done
+
+      - name: Push .rpm packages
+        run: |
+          VER=${{ steps.ver.outputs.num }}
+          for arch in amd64 arm64; do
+            RPM="pkgs/tunnel-client-${VER}-1.${arch}.rpm"
+            echo "Uploading ${RPM}..."
+            gcloud artifacts yum upload tunnel-client-yum \
+              --location="$LOCATION" \
+              --source="$RPM"
+          done
