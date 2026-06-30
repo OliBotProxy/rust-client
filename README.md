@@ -38,7 +38,9 @@ Get your tunnel ID and API key from [oli.bot](https://oli.bot) after signing up.
 
 ## Installation
 
-### Linux (Debian / Ubuntu)
+### Linux — Debian / Ubuntu
+
+**Install:**
 
 ```bash
 VER=$(curl -s https://api.github.com/repos/OliBotProxy/rust-client/releases/latest \
@@ -47,11 +49,34 @@ curl -LO "https://github.com/OliBotProxy/rust-client/releases/download/v${VER}/t
 sudo dpkg -i "tunnel-client_${VER}_amd64.deb"
 ```
 
-For arm64: replace `amd64` with `arm64` in the filename.
+For arm64 replace `amd64` with `arm64` in the filename.
 
-The package installs a systemd service. Edit `/etc/tunnel-client/env` with your credentials, then `sudo systemctl start tunnel-client`.
+**Configure** `/etc/tunnel-client/env`:
 
-### Linux (RHEL / Rocky / Amazon Linux)
+```ini
+TUNNEL_API_URL=https://api-us.oli.bot/api
+TUNNEL_ID=<YOUR_TUNNEL_ID>
+TUNNEL_API_KEY=<YOUR_API_KEY>
+```
+
+**Start:**
+
+```bash
+sudo systemctl enable --now tunnel-client
+sudo systemctl status tunnel-client
+```
+
+To pass extra flags (e.g. `--no-tls`), override the service unit:
+
+```bash
+sudo systemctl edit tunnel-client
+```
+
+---
+
+### Linux — RHEL / Rocky / Amazon Linux
+
+**Install:**
 
 ```bash
 VER=$(curl -s https://api.github.com/repos/OliBotProxy/rust-client/releases/latest \
@@ -60,13 +85,90 @@ curl -LO "https://github.com/OliBotProxy/rust-client/releases/download/v${VER}/t
 sudo rpm -i "tunnel-client-${VER}-1.amd64.rpm"
 ```
 
-For arm64: replace `amd64` with `arm64` in the filename.
+For arm64 replace `amd64` with `arm64` in the filename.
+
+**Configure** `/etc/tunnel-client/env` (same format as above), then:
+
+```bash
+sudo systemctl enable --now tunnel-client
+```
+
+---
 
 ### Windows
 
-Download `tunnel-client-windows-<version>.zip` from [Releases](https://github.com/OliBotProxy/rust-client/releases), extract, and run `install.ps1` as Administrator. See [INSTALLATION.md](INSTALLATION.md) for details.
+**Step 1 — Download**
 
-### Build from source
+Download `tunnel-client-windows-<version>.zip` from [Releases](https://github.com/OliBotProxy/rust-client/releases) and extract it to a temporary folder.
+
+**Step 2 — Install**
+
+Open **PowerShell as Administrator** and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+This installs the binary to `C:\Program Files\OliBot\tunnel-client\` and creates a config file at `C:\ProgramData\OliBot\tunnel-client\env.conf`.
+
+**Step 3 — Configure**
+
+Edit `C:\ProgramData\OliBot\tunnel-client\env.conf`:
+
+```ini
+# API endpoint — choose your region:
+TUNNEL_API_URL=https://api-us.oli.bot/api
+# TUNNEL_API_URL=https://api-eu.oli.bot/api
+# TUNNEL_API_URL=https://api-asia.oli.bot/api
+
+TUNNEL_ID=<YOUR_TUNNEL_ID>
+TUNNEL_API_KEY=<YOUR_API_KEY>
+```
+
+**Step 4 — Start**
+
+Re-run `install.ps1` to apply credentials and start the service, or:
+
+```powershell
+Start-Service tunnel-client
+Get-Service   tunnel-client   # should show Running
+```
+
+The service starts automatically on boot.
+
+**Update credentials:** edit `env.conf`, re-run `install.ps1` as Administrator.
+
+**Uninstall:**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File uninstall.ps1
+```
+
+---
+
+## Viewing logs
+
+### Linux
+
+```bash
+journalctl -u tunnel-client -f        # follow live
+journalctl -u tunnel-client -n 100    # last 100 lines
+journalctl -u tunnel-client -b        # since last boot
+```
+
+### Windows
+
+Logs are written to `C:\Program Files\OliBot\tunnel-client\tunnel-client.log` with automatic rotation at 10 MB (3 files kept).
+
+```powershell
+Get-Content "C:\Program Files\OliBot\tunnel-client\tunnel-client.log" -Wait -Tail 50
+```
+
+Service events also appear in **Windows Event Viewer** → `Windows Logs → Application` (source: `tunnel-client`).
+
+---
+
+## Build from source
 
 ```bash
 cargo build --bin tunnel-client --release
@@ -90,7 +192,7 @@ rustup target add x86_64-pc-windows-gnu
 
 ## Protocol
 
-Uses the oli.bot tunnel protocol v2 — a binary multiplexed framing protocol over TLS (or plain TCP with `--no-tls`). Frame header: 10 bytes (`type | stream_id | flags | length`, big-endian). See [tunnel-protocol.md](https://github.com/OliBotProxy/rust-client/blob/main/docs/tunnel-protocol.md) for the full spec.
+Uses the oli.bot tunnel protocol v2 — a binary multiplexed framing protocol over TLS (or plain TCP with `--no-tls`). Frame header: 10 bytes (`type | stream_id | flags | length`, big-endian).
 
 ## License
 
