@@ -41,30 +41,26 @@ Get your tunnel ID and API key from [oli.bot](https://oli.bot) after signing up.
 ### Linux (Debian / Ubuntu)
 
 ```bash
-curl -fsSL https://us-central1-apt.pkg.dev/doc/repo-signing-key.gpg \
-  | sudo gpg --dearmor -o /usr/share/keyrings/olibot-archive-keyring.gpg
-
-echo "deb [signed-by=/usr/share/keyrings/olibot-archive-keyring.gpg] \
-  https://us-central1-apt.pkg.dev/projects/proxyconfig-71f70 tunnel-client-apt main" \
-  | sudo tee /etc/apt/sources.list.d/olibot-client.list
-
-sudo apt update && sudo apt install tunnel-client
+VER=$(curl -s https://api.github.com/repos/OliBotProxy/rust-client/releases/latest \
+  | grep '"tag_name"' | cut -d'"' -f4 | sed 's/v//')
+curl -LO "https://github.com/OliBotProxy/rust-client/releases/download/v${VER}/tunnel-client_${VER}_amd64.deb"
+sudo dpkg -i "tunnel-client_${VER}_amd64.deb"
 ```
+
+For arm64: replace `amd64` with `arm64` in the filename.
 
 The package installs a systemd service. Edit `/etc/tunnel-client/env` with your credentials, then `sudo systemctl start tunnel-client`.
 
 ### Linux (RHEL / Rocky / Amazon Linux)
 
 ```bash
-cat <<EOF | sudo tee /etc/yum.repos.d/olibot.repo
-[olibot-client]
-name=Oli.bot Tunnel Client
-baseurl=https://us-central1-yum.pkg.dev/projects/proxyconfig-71f70/tunnel-client-yum
-enabled=1
-gpgcheck=0
-EOF
-sudo dnf install tunnel-client
+VER=$(curl -s https://api.github.com/repos/OliBotProxy/rust-client/releases/latest \
+  | grep '"tag_name"' | cut -d'"' -f4 | sed 's/v//')
+curl -LO "https://github.com/OliBotProxy/rust-client/releases/download/v${VER}/tunnel-client-${VER}-1.amd64.rpm"
+sudo rpm -i "tunnel-client-${VER}-1.amd64.rpm"
 ```
+
+For arm64: replace `amd64` with `arm64` in the filename.
 
 ### Windows
 

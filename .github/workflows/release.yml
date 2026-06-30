@@ -196,13 +196,30 @@ jobs:
           generate_release_notes: true
           files: release/*
 
+  # ── Check whether GCP credentials are available ──────────────────
+  check-gcp:
+    name: Check GCP credentials
+    needs: package
+    runs-on: ubuntu-latest
+    outputs:
+      has-key: ${{ steps.check.outputs.has-key }}
+    steps:
+      - id: check
+        env:
+          KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "has-key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-key=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # ── Publish to Google Artifact Registry ──────────────────────────
   publish-gar:
     name: Publish to Google Artifact Registry
-    needs: package
+    needs: [package, check-gcp]
     runs-on: ubuntu-latest
-    # Skip if GCP credentials not configured
-    if: ${{ secrets.GCP_SA_KEY != '' }}
+    if: needs.check-gcp.outputs.has-key == 'true'
     env:
       PROJECT: proxyconfig-71f70
       LOCATION: us-central1

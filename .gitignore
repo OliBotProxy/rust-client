@@ -1,3 +1,5 @@
 /target
 /dist-windows
 *.zip
+tunnel-client_*
+tunnel-client-*
