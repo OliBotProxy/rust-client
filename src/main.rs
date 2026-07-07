@@ -449,15 +449,39 @@ where
   // Streams waiting for body DATA frames before their handler can run.
   let body_senders: Arc<Mutex<HashMap<u32, mpsc::Sender<Option<Bytes>>>>> = Arc::new(Mutex::new(HashMap::new()));
 
+  // ── Keepalive task — sends PING every 30s so dead connections are detected ─
+  let kw = writer.clone();
+  let keepalive = tokio::spawn(async move {
+    let mut seq: u64 = 0;
+    loop {
+      tokio::time::sleep(Duration::from_secs(30)).await;
+      seq += 1;
+      let ping = Frame { frame_type: FrameType::Ping, stream_id: 0, flags: 0, payload: Bytes::copy_from_slice(&seq.to_be_bytes()) };
+      let mut w = kw.lock().await;
+      if write_frame(&mut *w, &ping).await.is_err() { break; }
+      let _ = w.flush().await;
+    }
+  });
+
   // ── Reader loop ───────────────────────────────────────────────────────────
+  const READ_TIMEOUT: Duration = Duration::from_secs(60);
   loop {
-    let frame = match read_frame(&mut reader).await {
-      Ok(f) => f,
-      Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+    let frame = match tokio::time::timeout(READ_TIMEOUT, read_frame(&mut reader)).await {
+      Err(_) => {
+        warn!("No frame from server in 60s — reconnecting");
+        keepalive.abort();
+        return Err("keepalive timeout".into());
+      }
+      Ok(Ok(f)) => f,
+      Ok(Err(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
         info!("Tunnel server disconnected");
+        keepalive.abort();
         return Ok(());
       }
-      Err(e) => return Err(e.into()),
+      Ok(Err(e)) => {
+        keepalive.abort();
+        return Err(e.into());
+      }
     };
 
     match frame.frame_type {
@@ -513,8 +537,13 @@ where
         let _ = w.flush().await;
       }
 
+      FrameType::Pong => {
+        // PONG received — keepalive round-trip confirmed
+      }
+
       FrameType::GoAway => {
         info!("GOAWAY received, closing session");
+        keepalive.abort();
         return Ok(());
       }
 
