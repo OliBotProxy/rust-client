@@ -271,7 +271,10 @@ async fn fetch_tunnel_info(api_url: &str, tunnel_id: &str, api_key: &str) -> Res
   let req = hyper::Request::builder().method("GET").uri(&url)
     .header("Authorization", format!("Bearer {}", api_key)).body(Full::new(Bytes::new()))
     .map_err(|e| format!("Request build error: {}", e))?;
-  let res = client.request(req).await.map_err(|e| format!("HTTP error: {}", e))?;
+  let res = tokio::time::timeout(Duration::from_secs(15), client.request(req))
+    .await
+    .map_err(|_| "Tunnel info request timed out after 15s".to_string())?
+    .map_err(|e| format!("HTTP error: {}", e))?;
   let status = res.status();
   let body = String::from_utf8_lossy(&res.into_body().collect().await.map_err(|e| e.to_string())?.to_bytes()).to_string();
   if status.is_success() {
@@ -392,7 +395,10 @@ async fn run_session(args: &Args, proxy_address: &str) -> Result<(), Box<dyn std
     None => proxy_address.to_string(),
   };
 
-  let tcp = TcpStream::connect(&connect_addr).await?;
+  let tcp = tokio::time::timeout(Duration::from_secs(15), TcpStream::connect(&connect_addr))
+    .await
+    .map_err(|_| format!("TCP connect to {} timed out after 15s", connect_addr))?
+    .map_err(|e| format!("TCP connect error: {}", e))?;
 
   if args.no_tls {
     info!("Connected (plain TCP) to {}", proxy_address);
