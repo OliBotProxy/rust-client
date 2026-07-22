@@ -1,6 +1,6 @@
 [package]
 name = "tunnel-client"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 description = "Tunnel client for oli.bot — expose local backends through a reverse proxy tunnel"
 homepage = "https://oli.bot"

@@ -13,7 +13,7 @@ if [[ ! -x "$FPM" ]]; then
     exit 1
 fi
 
-VERSION="1.0.1"
+VERSION="1.0.2"
 PROJECT="proxyconfig-71f70"
 LOCATION="us-central1"
 
