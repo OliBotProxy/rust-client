@@ -60,6 +60,37 @@ jobs:
           name: binary-${{ matrix.arch }}
           path: target/${{ matrix.target }}/release/tunnel-client
 
+  # ── Build Windows binary ──────────────────────────────────────────
+  build-windows:
+    name: Build (windows-amd64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-x86_64-pc-windows-msvc-${{ hashFiles('Cargo.lock') }}
+          restore-keys: windows-x86_64-pc-windows-msvc-
+
+      - name: Build
+        run: cargo build --bin tunnel-client --target x86_64-pc-windows-msvc --release
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-windows-amd64
+          path: target/x86_64-pc-windows-msvc/release/tunnel-client.exe
+
   # ── Package .deb and .rpm ─────────────────────────────────────────
   package:
     name: Package (${{ matrix.arch }})
@@ -151,7 +182,7 @@ jobs:
   # ── Create GitHub Release ─────────────────────────────────────────
   release:
     name: GitHub Release
-    needs: package
+    needs: [package, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -165,6 +196,7 @@ jobs:
             TAG="${{ github.ref_name }}"
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "num=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Download all packages
         uses: actions/download-artifact@v4
@@ -180,11 +212,16 @@ jobs:
           merge-multiple: false
           path: binaries/
 
-      - name: Rename raw binaries for release
+      - name: Package all binaries for release
         run: |
           mkdir -p release
-          mv binaries/binary-amd64/tunnel-client release/tunnel-client-linux-amd64 2>/dev/null || true
-          mv binaries/binary-arm64/tunnel-client release/tunnel-client-linux-arm64 2>/dev/null || true
+          VER=${{ steps.ver.outputs.num }}
+          # Linux raw binaries
+          mv binaries/binary-amd64/tunnel-client   release/tunnel-client-linux-amd64  2>/dev/null || true
+          mv binaries/binary-arm64/tunnel-client   release/tunnel-client-linux-arm64  2>/dev/null || true
+          # Windows zip
+          cp binaries/binary-windows-amd64/tunnel-client.exe tunnel-client.exe
+          zip "release/tunnel-client_${VER}_windows-amd64.zip" tunnel-client.exe
           ls -lh release/
 
       - name: Create Release
