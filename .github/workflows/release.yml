@@ -229,7 +229,11 @@ jobs:
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: Release ${{ steps.ver.outputs.tag }}
-          draft: true
+          # Publish directly rather than creating a draft — draft releases are
+          # invisible to users and to /releases/latest, and in practice they sat
+          # unpublished. The tag is the deliberate act; treat it as the go-ahead.
+          draft: false
+          make_latest: true
           generate_release_notes: true
           files: release/*
 
