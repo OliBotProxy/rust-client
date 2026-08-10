@@ -13,7 +13,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
-use std::time::Duration;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, mpsc};
@@ -311,6 +312,10 @@ async fn build_tls_config(ca_cert_path: Option<&str>) -> Result<ClientConfig, Bo
 
 // ─── DNS fallback (system resolver → Cloudflare DoH) ─────────────────────────
 
+fn unix_now() -> u64 {
+  SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+}
+
 async fn resolve_to_ip(hostname: &str) -> Option<String> {
   if let Ok(mut addrs) = tokio::net::lookup_host(format!("{}:0", hostname)).await {
     if let Some(addr) = addrs.next() { return Some(addr.ip().to_string()); }
@@ -400,6 +405,13 @@ async fn run_session(args: &Args, proxy_address: &str) -> Result<(), Box<dyn std
     .map_err(|_| format!("TCP connect to {} timed out after 15s", connect_addr))?
     .map_err(|e| format!("TCP connect error: {}", e))?;
 
+  // Framed protocol with many small writes (frame headers, PING/PONG, DATA
+  // chunks) — don't let Nagle's algorithm hold them back waiting to batch.
+  // The proxy sets this on its side of the socket too.
+  if let Err(e) = tcp.set_nodelay(true) {
+    warn!("Failed to set TCP_NODELAY: {}", e);
+  }
+
   if args.no_tls {
     info!("Connected (plain TCP) to {}", proxy_address);
     let (reader, writer) = tokio::io::split(tcp);
@@ -455,12 +467,22 @@ where
   // Streams waiting for body DATA frames before their handler can run.
   let body_senders: Arc<Mutex<HashMap<u32, mpsc::Sender<Option<Bytes>>>>> = Arc::new(Mutex::new(HashMap::new()));
 
-  // ── Keepalive task — sends PING every 30s so dead connections are detected ─
+  // ── Keepalive task — PING only once the link has gone quiet ───────────────
+  // Receiving *any* frame proves the connection is alive, so a PING is only
+  // useful after a genuine idle gap. Pinging unconditionally adds pointless
+  // frames in the middle of a large transfer, where they queue behind the data
+  // they're supposedly probing. `last_rx` is stamped by the reader loop below.
+  let last_rx = Arc::new(AtomicU64::new(unix_now()));
   let kw = writer.clone();
+  let ka_last_rx = last_rx.clone();
   let keepalive = tokio::spawn(async move {
     let mut seq: u64 = 0;
     loop {
-      tokio::time::sleep(Duration::from_secs(30)).await;
+      // Poll finer than the idle threshold so detection stays responsive.
+      tokio::time::sleep(Duration::from_secs(5)).await;
+      if unix_now().saturating_sub(ka_last_rx.load(Ordering::Relaxed)) < 30 {
+        continue;
+      }
       seq += 1;
       let ping = Frame { frame_type: FrameType::Ping, stream_id: 0, flags: 0, payload: Bytes::copy_from_slice(&seq.to_be_bytes()) };
       let mut w = kw.lock().await;
@@ -478,7 +500,11 @@ where
         keepalive.abort();
         return Err("keepalive timeout".into());
       }
-      Ok(Ok(f)) => f,
+      Ok(Ok(f)) => {
+        // Any frame — not just PONG — proves the server side is alive.
+        last_rx.store(unix_now(), Ordering::Relaxed);
+        f
+      }
       Ok(Err(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
         info!("Tunnel server disconnected");
         keepalive.abort();
