@@ -232,7 +232,9 @@ struct Args {
 impl Args {
   fn parse() -> Result<Self, Box<dyn std::error::Error>> {
     let matches = Command::new("tunnel-client")
-      .version("2.0")
+      // Sourced from Cargo.toml so `--version` can't drift from the crate version
+      // (it previously reported a hardcoded "2.0" against a 1.0.x crate).
+      .version(env!("CARGO_PKG_VERSION"))
       .about("Tunnel client (protocol v2) for rust-rpxy")
       .arg(Arg::new("api-url").short('a').long("api-url").required(true).help("Proxy-admin API base URL"))
       .arg(Arg::new("tunnel-id").short('t').long("tunnel-id").required(true).help("Tunnel ID"))
