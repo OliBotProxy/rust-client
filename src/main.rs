@@ -358,7 +358,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   info!("Tunnel client v2 starting (tunnel_id={}, tls={})", args.tunnel_id, !args.no_tls);
 
   let default_port = if args.no_tls { "8779" } else { "8778" };
-  let interval = Duration::from_secs(args.reconnect_interval);
+  // Reconnect with exponential backoff: --reconnect-interval, doubling per
+  // consecutive failure up to MAX_RECONNECT_BACKOFF. A fixed interval meant a
+  // persistently failing client (expired proxy cert, suspended tunnel) retried
+  // ~40x/minute indefinitely, each attempt also hitting the API.
+  let base_delay = Duration::from_secs(args.reconnect_interval.max(1));
+  let mut delay = base_delay;
   let mut last_proxy_addr: Option<String> = None;
 
   loop {
@@ -376,18 +381,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         addr
       }
       Err(e) => {
-        warn!("Failed to fetch proxy address: {} — retrying in {}s", e, args.reconnect_interval);
-        tokio::time::sleep(interval).await;
+        warn!("Failed to fetch proxy address: {} — retrying in {}s", e, delay.as_secs());
+        tokio::time::sleep(delay).await;
+        delay = next_backoff(delay, base_delay);
         continue;
       }
     };
 
+    let started = std::time::Instant::now();
     if let Err(e) = run_session(&args, &proxy_addr).await {
       warn!("Session error: {}", e);
     }
-    info!("Reconnecting in {} second(s)...", args.reconnect_interval);
-    tokio::time::sleep(interval).await;
+    // A session that stayed up counts as healthy (e.g. the proxy closed it to
+    // apply a config change) — reconnect promptly rather than backing off.
+    if started.elapsed() >= HEALTHY_SESSION {
+      delay = base_delay;
+    }
+    info!("Reconnecting in {} second(s)...", delay.as_secs());
+    tokio::time::sleep(delay).await;
+    delay = next_backoff(delay, base_delay);
   }
+}
+
+/// Upper bound for the reconnect delay after repeated failures.
+const MAX_RECONNECT_BACKOFF: Duration = Duration::from_secs(60);
+/// A session that lasted at least this long resets the backoff.
+const HEALTHY_SESSION: Duration = Duration::from_secs(60);
+
+fn next_backoff(current: Duration, base: Duration) -> Duration {
+  (current * 2).min(MAX_RECONNECT_BACKOFF.max(base))
 }
 
 // ─── Single session ───────────────────────────────────────────────────────────
@@ -810,4 +832,27 @@ fn dechunk(data: &[u8]) -> Vec<u8> {
     pos += chunk_size + 2; // skip trailing CRLF
   }
   result
+}
+
+#[cfg(test)]
+mod backoff_tests {
+  use super::*;
+
+  #[test]
+  fn doubles_up_to_the_cap() {
+    let base = Duration::from_secs(1);
+    let mut d = base;
+    let mut seen = vec![];
+    for _ in 0..9 {
+      seen.push(d.as_secs());
+      d = next_backoff(d, base);
+    }
+    assert_eq!(seen, vec![1, 2, 4, 8, 16, 32, 60, 60, 60]);
+  }
+
+  #[test]
+  fn base_above_cap_is_respected() {
+    let base = Duration::from_secs(120);
+    assert_eq!(next_backoff(base, base), base);
+  }
 }
