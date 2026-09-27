@@ -1,0 +1,7 @@
+#!/bin/sh
+. "$(dirname "$0")/common"
+if ! arch_supported; then
+  ui_message "This NAS ($(uname -m)) is not supported. The tunnel client needs a 64-bit Intel/AMD or an ARMv7/ARMv8 CPU."
+  exit 1
+fi
+exit 0

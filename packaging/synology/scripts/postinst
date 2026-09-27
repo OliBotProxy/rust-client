@@ -1,0 +1,4 @@
+#!/bin/sh
+. "$(dirname "$0")/common"
+write_config
+exit 0

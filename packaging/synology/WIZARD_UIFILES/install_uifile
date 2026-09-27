@@ -1,0 +1,44 @@
+[
+  {
+    "step_title": "Connect to clientproxy.io",
+    "items": [
+      {
+        "type": "singleselect",
+        "desc": "Choose the region your tunnel was created in (shown in the clientproxy.io dashboard).",
+        "subitems": [
+          { "key": "wizard_region_us",   "desc": "United States", "defaultValue": true },
+          { "key": "wizard_region_eu",   "desc": "Europe",        "defaultValue": false },
+          { "key": "wizard_region_asia", "desc": "Asia",          "defaultValue": false }
+        ]
+      },
+      {
+        "type": "textfield",
+        "desc": "Copy these from the clientproxy.io dashboard. Map your domains to backends such as localhost:5000 (DSM) or localhost:8096 (Jellyfin) there.",
+        "subitems": [
+          {
+            "key": "wizard_tunnel_id",
+            "desc": "Tunnel ID",
+            "validator": {
+              "allowBlank": false,
+              "regex": { "expr": "/^[A-Za-z0-9_-]+$/", "errorText": "Tunnel ID contains invalid characters" }
+            }
+          }
+        ]
+      },
+      {
+        "type": "password",
+        "desc": "",
+        "subitems": [
+          {
+            "key": "wizard_api_key",
+            "desc": "API key",
+            "validator": {
+              "allowBlank": false,
+              "regex": { "expr": "/^[A-Za-z0-9]+_[A-Za-z0-9-]+$/", "errorText": "Expected format: <subscriptionId>_<key>" }
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -236,28 +236,34 @@ impl Args {
       // (it previously reported a hardcoded "2.0" against a 1.0.x crate).
       .version(env!("CARGO_PKG_VERSION"))
       .about("Tunnel client (protocol v2) for rust-rpxy")
-      .arg(Arg::new("api-url").short('a').long("api-url").required(true).help("Proxy-admin API base URL"))
-      .arg(Arg::new("tunnel-id").short('t').long("tunnel-id").required(true).help("Tunnel ID"))
-      .arg(Arg::new("api-key").short('k').long("api-key").required(true).help("API key (<subscriptionId>_<salt>)"))
-      .arg(Arg::new("reconnect-interval").short('r').long("reconnect-interval").default_value("1").help("Reconnect interval (seconds)"))
-      .arg(Arg::new("no-tls").long("no-tls").action(clap::ArgAction::SetTrue)
+      // Every flag can also come from the environment so containers and NAS
+      // packages can configure the client without a shell wrapper.
+      .arg(Arg::new("api-url").short('a').long("api-url").env("TUNNEL_API_URL").required(true).help("Proxy-admin API base URL"))
+      .arg(Arg::new("tunnel-id").short('t').long("tunnel-id").env("TUNNEL_ID").required(true).help("Tunnel ID"))
+      .arg(Arg::new("api-key").short('k').long("api-key").env("TUNNEL_API_KEY").hide_env_values(true).required(true).help("API key (<subscriptionId>_<salt>)"))
+      .arg(Arg::new("reconnect-interval").short('r').long("reconnect-interval").env("TUNNEL_RECONNECT_INTERVAL").default_value("1").help("Reconnect interval (seconds)"))
+      .arg(Arg::new("no-tls").long("no-tls").env("TUNNEL_NO_TLS").action(clap::ArgAction::SetTrue)
+        .value_parser(clap::builder::FalseyValueParser::new())
         .help("Use plain TCP (no TLS) — for ESP32 or local testing. Server must listen on tunnel_port (not tunnel_port_tls)"))
-      .arg(Arg::new("tls-server-name").long("tls-server-name").required(false).help("Override TLS SNI hostname"))
-      .arg(Arg::new("tls-ca-cert-path").long("tls-ca-cert-path").required(false).help("Custom CA cert for tunnel TLS"))
-      .arg(Arg::new("verbose").short('v').long("verbose").action(clap::ArgAction::SetTrue).help("Debug logging"))
+      .arg(Arg::new("tls-server-name").long("tls-server-name").env("TUNNEL_TLS_SERVER_NAME").required(false).help("Override TLS SNI hostname"))
+      .arg(Arg::new("tls-ca-cert-path").long("tls-ca-cert-path").env("TUNNEL_TLS_CA_CERT_PATH").required(false).help("Custom CA cert for tunnel TLS"))
+      .arg(Arg::new("verbose").short('v').long("verbose").env("TUNNEL_VERBOSE").action(clap::ArgAction::SetTrue)
+        .value_parser(clap::builder::FalseyValueParser::new())
+        .help("Debug logging"))
       .get_matches();
 
     let reconnect_interval = matches.get_one::<String>("reconnect-interval").unwrap()
       .parse().unwrap_or(DEFAULT_RECONNECT_INTERVAL_SECS);
 
+    // An empty env var (e.g. `TUNNEL_TLS_SERVER_NAME=` in a compose file) means unset.
     Ok(Args {
       api_url: matches.get_one::<String>("api-url").unwrap().clone(),
       tunnel_id: matches.get_one::<String>("tunnel-id").unwrap().clone(),
       api_key: matches.get_one::<String>("api-key").unwrap().clone(),
       reconnect_interval,
       no_tls: matches.get_flag("no-tls"),
-      tls_server_name: matches.get_one::<String>("tls-server-name").cloned(),
-      tls_ca_cert_path: matches.get_one::<String>("tls-ca-cert-path").cloned(),
+      tls_server_name: matches.get_one::<String>("tls-server-name").filter(|s| !s.is_empty()).cloned(),
+      tls_ca_cert_path: matches.get_one::<String>("tls-ca-cert-path").filter(|s| !s.is_empty()).cloned(),
       verbose: matches.get_flag("verbose"),
     })
   }
@@ -352,6 +358,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let args = Args::parse()?;
   tracing_subscriber::fmt()
     .with_max_level(if args.verbose { tracing::Level::DEBUG } else { tracing::Level::INFO })
+    // No colour codes when logging to a file, journald or `docker logs`
+    .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stdout()))
     .init();
   let _ = CryptoProvider::install_default(rustls::crypto::ring::default_provider());
 

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Picks the static binary matching this NAS's CPU. The package ships all of
+# them so a single .spk installs on Intel/AMD and ARM models alike.
+DIR=$(dirname "$0")
+case "$(uname -m)" in
+  x86_64|amd64)   ARCH=amd64 ;;
+  aarch64|arm64)  ARCH=arm64 ;;
+  armv7*|armv8l)  ARCH=armv7 ;;
+  *) echo "tunnel-client: unsupported CPU architecture $(uname -m)" >&2; exit 1 ;;
+esac
+exec "$DIR/tunnel-client-linux-$ARCH" "$@"

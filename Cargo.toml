@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 bytes        = "1.11.1"
-clap         = { version = "4.6", features = ["std", "cargo", "wrap_help"] }
+clap         = { version = "4.6", features = ["std", "cargo", "wrap_help", "env"] }
 http-body-util = "0.1.3"
 hyper        = { version = "1.9.0", default-features = false, features = ["client", "http1"] }
 hyper-rustls = { version = "0.27.9", default-features = false, features = ["ring", "http1", "http2", "webpki-roots"] }

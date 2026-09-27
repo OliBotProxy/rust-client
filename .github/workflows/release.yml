@@ -27,6 +27,9 @@ jobs:
             arch: amd64
           - target: aarch64-unknown-linux-musl
             arch: arm64
+          # 32-bit ARM: older Synology/QNAP ARM models, Raspberry Pi OS 32-bit
+          - target: armv7-unknown-linux-musleabihf
+            arch: armv7
     steps:
       - uses: actions/checkout@v4
 
@@ -179,10 +182,110 @@ jobs:
             *.deb
             *.rpm
 
+  # ── Synology DSM 7 package (.spk, all CPUs in one file) ──────────
+  package-synology:
+    name: Package (synology)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: ver
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "num=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: binaries/
+
+      - name: Build .spk
+        run: |
+          mkdir -p bin
+          for arch in amd64 arm64 armv7; do
+            cp "binaries/binary-${arch}/tunnel-client" "bin/tunnel-client-linux-${arch}"
+          done
+          packaging/synology/build-spk.sh "${{ steps.ver.outputs.num }}" bin .
+
+      - name: Upload .spk
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-synology
+          path: |
+            *.spk
+            synology-feed.json
+
+  # ── Multi-arch container image → GHCR ─────────────────────────────
+  docker:
+    name: Container image
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/olibotproxy/tunnel-client
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: ver
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "num=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: binaries/
+
+      - name: Lay out build context by platform
+        run: |
+          install -D -m 0755 binaries/binary-amd64/tunnel-client ctx/linux/amd64/tunnel-client
+          install -D -m 0755 binaries/binary-arm64/tunnel-client ctx/linux/arm64/tunnel-client
+          install -D -m 0755 binaries/binary-armv7/tunnel-client ctx/linux/arm/v7/tunnel-client
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ctx
+          file: docker/Dockerfile.release
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.ver.outputs.num }}
+            ${{ env.IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.title=tunnel-client
+            org.opencontainers.image.description=clientproxy.io tunnel client
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.ver.outputs.num }}
+            org.opencontainers.image.licenses=MIT
+
   # ── Create GitHub Release ─────────────────────────────────────────
   release:
     name: GitHub Release
-    needs: [package, build-windows]
+    needs: [package, package-synology, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -221,6 +324,7 @@ jobs:
           # Linux raw binaries
           mv binaries/binary-amd64/tunnel-client   release/tunnel-client-linux-amd64  2>/dev/null || true
           mv binaries/binary-arm64/tunnel-client   release/tunnel-client-linux-arm64  2>/dev/null || true
+          mv binaries/binary-armv7/tunnel-client   release/tunnel-client-linux-armv7  2>/dev/null || true
           # Windows installer zip, including service wrapper and configuration migration.
           mkdir -p windows-package
           cp binaries/binary-windows-amd64/tunnel-client.exe windows-package/

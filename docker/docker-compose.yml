@@ -1,0 +1,20 @@
+# clientproxy.io tunnel client
+#
+# Works with Synology Container Manager (Project), QNAP Container Station,
+# TrueNAS SCALE (custom app), OpenMediaVault compose plugin, CasaOS/ZimaOS,
+# Portainer, or plain `docker compose up -d`.
+services:
+  tunnel-client:
+    image: ghcr.io/olibotproxy/tunnel-client:latest
+    container_name: tunnel-client
+    restart: unless-stopped
+    # Host networking lets backends configured as localhost:<port> in the
+    # dashboard reach services running on the NAS itself. Without it,
+    # "localhost" means the container, and backends must use the NAS LAN IP.
+    network_mode: host
+    environment:
+      # Region: api-us / api-eu / api-asia
+      TUNNEL_API_URL: https://api-us.clientproxy.io/api
+      TUNNEL_ID: YOUR_TUNNEL_ID
+      TUNNEL_API_KEY: YOUR_API_KEY
+      # TUNNEL_VERBOSE: "true"

@@ -1,0 +1,68 @@
+# Shared by the package scripts. Sourced, not executed.
+PKG_NAME="tunnel-client"
+PKG_DEST="${SYNOPKG_PKGDEST:-/var/packages/$PKG_NAME/target}"
+PKG_VAR="${SYNOPKG_PKGVAR:-/var/packages/$PKG_NAME/var}"
+ENV_FILE="$PKG_VAR/env"
+PID_FILE="$PKG_VAR/tunnel-client.pid"
+LOG_FILE="$PKG_VAR/tunnel-client.log"
+
+# Message shown in the DSM Package Center dialog when a script fails.
+ui_message() {
+  if [ -n "$SYNOPKG_TEMP_LOGFILE" ]; then
+    echo "$1" > "$SYNOPKG_TEMP_LOGFILE"
+  fi
+  echo "$1" >&2
+}
+
+arch_supported() {
+  case "$(uname -m)" in
+    x86_64|amd64|aarch64|arm64|armv7*|armv8l) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Region radio buttons from the install/upgrade wizard → API URL (empty = unchanged).
+wizard_api_url() {
+  if [ "$wizard_region_eu" = "true" ]; then
+    echo "https://api-eu.clientproxy.io/api"
+  elif [ "$wizard_region_asia" = "true" ]; then
+    echo "https://api-asia.clientproxy.io/api"
+  elif [ "$wizard_region_us" = "true" ]; then
+    echo "https://api-us.clientproxy.io/api"
+  fi
+}
+
+# Reads KEY from the env file without sourcing it.
+env_get() {
+  [ -f "$ENV_FILE" ] || return 0
+  sed -n "s/^$1='\{0,1\}\([^']*\)'\{0,1\}\$/\1/p" "$ENV_FILE" | tail -n 1
+}
+
+# Keeps only characters that can appear in URLs, tunnel IDs and API keys.
+sanitize() {
+  printf '%s' "$1" | tr -cd 'A-Za-z0-9_.:/-'
+}
+
+# Merges wizard answers into the env file; blank answers keep current values.
+write_config() {
+  url=$(wizard_api_url)
+  id=$(sanitize "$wizard_tunnel_id")
+  key=$(sanitize "$wizard_api_key")
+  [ -n "$url" ] || url=$(env_get TUNNEL_API_URL)
+  [ -n "$id" ]  || id=$(env_get TUNNEL_ID)
+  [ -n "$key" ] || key=$(env_get TUNNEL_API_KEY)
+  [ -n "$url" ] || url="https://api-us.clientproxy.io/api"
+  verbose=$(env_get TUNNEL_VERBOSE)
+
+  mkdir -p "$PKG_VAR"
+  umask 077
+  cat > "$ENV_FILE" <<CONF
+# clientproxy.io tunnel client configuration.
+# Change it by running the package upgrade wizard, or edit over SSH and
+# restart the package in Package Center.
+TUNNEL_API_URL='$url'
+TUNNEL_ID='$id'
+TUNNEL_API_KEY='$key'
+TUNNEL_VERBOSE='${verbose:-false}'
+CONF
+}

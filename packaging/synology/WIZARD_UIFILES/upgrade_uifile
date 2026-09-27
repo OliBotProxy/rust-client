@@ -1,0 +1,45 @@
+[
+  {
+    "step_title": "Tunnel settings",
+    "items": [
+      {
+        "type": "singleselect",
+        "desc": "Keep your current region or switch to another one.",
+        "subitems": [
+          { "key": "wizard_region_keep", "desc": "Keep current", "defaultValue": true },
+          { "key": "wizard_region_us",   "desc": "United States", "defaultValue": false },
+          { "key": "wizard_region_eu",   "desc": "Europe",        "defaultValue": false },
+          { "key": "wizard_region_asia", "desc": "Asia",          "defaultValue": false }
+        ]
+      },
+      {
+        "type": "textfield",
+        "desc": "Leave blank to keep the current values.",
+        "subitems": [
+          {
+            "key": "wizard_tunnel_id",
+            "desc": "Tunnel ID",
+            "validator": {
+              "allowBlank": true,
+              "regex": { "expr": "/^[A-Za-z0-9_-]*$/", "errorText": "Tunnel ID contains invalid characters" }
+            }
+          }
+        ]
+      },
+      {
+        "type": "password",
+        "desc": "",
+        "subitems": [
+          {
+            "key": "wizard_api_key",
+            "desc": "API key",
+            "validator": {
+              "allowBlank": true,
+              "regex": { "expr": "/^([A-Za-z0-9]+_[A-Za-z0-9-]+)?$/", "errorText": "Expected format: <subscriptionId>_<key>" }
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
