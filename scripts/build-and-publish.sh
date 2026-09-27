@@ -13,7 +13,7 @@ if [[ ! -x "$FPM" ]]; then
     exit 1
 fi
 
-VERSION="1.0.2"
+VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
 PROJECT="proxyconfig-71f70"
 LOCATION="us-central1"
 
@@ -62,8 +62,8 @@ for target_info in "${TARGETS[@]}"; do
     $FPM -s dir -t deb -n tunnel-client -v "$VERSION" \
         --architecture "$ARCH" \
         --depends "ca-certificates" \
-        --maintainer "Oli.bot <info@oli.bot>" \
-        --description "Oli.bot tunnel client — expose local backends through a secure reverse-proxy tunnel" \
+        --maintainer "clientproxy.io <info@clientproxy.io>" \
+        --description "clientproxy.io tunnel client — expose local backends through a secure reverse-proxy tunnel" \
         --after-install "scripts/postinst-tunnel-client.sh" \
         --before-remove  "scripts/prerm-tunnel-client.sh" \
         -p "$DEB_NAME" \
@@ -74,8 +74,8 @@ for target_info in "${TARGETS[@]}"; do
     $FPM -s dir -t rpm -n tunnel-client -v "$VERSION" \
         --architecture "$ARCH" \
         --depends "ca-certificates" \
-        --maintainer "Oli.bot <info@oli.bot>" \
-        --description "Oli.bot tunnel client — expose local backends through a secure reverse-proxy tunnel" \
+        --maintainer "clientproxy.io <info@clientproxy.io>" \
+        --description "clientproxy.io tunnel client — expose local backends through a secure reverse-proxy tunnel" \
         --after-install "scripts/postinst-tunnel-client.sh" \
         --before-remove  "scripts/prerm-tunnel-client.sh" \
         -p "$RPM_NAME" \

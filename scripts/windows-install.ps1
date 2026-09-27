@@ -20,7 +20,7 @@ $ConfigFile  = "$ConfigDir\env.conf"
 $ServiceName = 'tunnel-client'
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
-Write-Host "=== Oli.bot Tunnel Client Installer ===" -ForegroundColor Cyan
+Write-Host "=== clientproxy.io Tunnel Client Installer ===" -ForegroundColor Cyan
 
 # --- Copy binaries and WinSW wrapper ---
 Write-Host "Installing to $InstallDir..."
@@ -33,16 +33,16 @@ Copy-Item "$ScriptDir\tunnel-client-svc.xml" "$InstallDir\tunnel-client-svc.xml"
 New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
 if (-not (Test-Path $ConfigFile)) {
     @'
-# Oli.bot Tunnel Client configuration
+# clientproxy.io Tunnel Client configuration
 # Edit this file, then run: Restart-Service tunnel-client
 
 # API endpoint — choose your region:
-#   https://api-us.oli.bot/api   (United States)
-#   https://api-eu.oli.bot/api   (Europe)
-#   https://api-asia.oli.bot/api (Asia)
-TUNNEL_API_URL=https://api-us.oli.bot/api
+#   https://api-us.clientproxy.io/api   (United States)
+#   https://api-eu.clientproxy.io/api   (Europe)
+#   https://api-asia.clientproxy.io/api (Asia)
+TUNNEL_API_URL=https://api-us.clientproxy.io/api
 
-# Your tunnel ID from the oli.bot dashboard
+# Your tunnel ID from the clientproxy.io dashboard
 TUNNEL_ID=YOUR_TUNNEL_ID
 
 # Your API key (<subscriptionId>_<salt> format)
@@ -51,6 +51,19 @@ TUNNEL_API_KEY=YOUR_API_KEY
     Write-Host "Created config at $ConfigFile" -ForegroundColor Yellow
 } else {
     Write-Host "Config already exists at $ConfigFile — not overwritten." -ForegroundColor Green
+}
+
+# Keep credentials and region selection when upgrading an existing installation.
+$configText = Get-Content $ConfigFile -Raw
+foreach ($region in @('us', 'eu', 'asia')) {
+    $oldUrl = "https://api-$region.oli.bot/api"
+    $newUrl = "https://api-$region.clientproxy.io/api"
+    $updated = $configText.Replace("TUNNEL_API_URL=$oldUrl", "TUNNEL_API_URL=$newUrl")
+    if ($updated -ne $configText) {
+        Set-Content $ConfigFile $updated -Encoding UTF8
+        Write-Host "Migrated API URL to $newUrl" -ForegroundColor Green
+        break
+    }
 }
 
 # --- Load env.conf values into user environment (WinSW reads them at start) ---

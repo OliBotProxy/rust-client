@@ -1,6 +1,6 @@
 # tunnel-client
 
-The open-source client binary for [oli.bot](https://oli.bot) — expose any local HTTP server to the internet through a secure reverse-proxy tunnel, with no port forwarding required.
+The open-source client binary for [clientproxy.io](https://clientproxy.io) — expose any local HTTP server to the internet through a secure reverse-proxy tunnel, with no port forwarding required.
 
 Works on Linux, macOS, Windows, and (with `--no-tls`) ESP32 / constrained embedded devices.
 
@@ -8,12 +8,12 @@ Works on Linux, macOS, Windows, and (with `--no-tls`) ESP32 / constrained embedd
 
 ```bash
 tunnel-client \
-  --api-url  https://api-us.oli.bot/api \
+  --api-url  https://api-us.clientproxy.io/api \
   --tunnel-id <YOUR_TUNNEL_ID> \
   --api-key   <YOUR_API_KEY>
 ```
 
-Get your tunnel ID and API key from [oli.bot](https://oli.bot) after signing up.
+Get your tunnel ID and API key from [clientproxy.io](https://clientproxy.io) after signing up.
 
 ## Flags
 
@@ -32,9 +32,9 @@ Get your tunnel ID and API key from [oli.bot](https://oli.bot) after signing up.
 
 | Region | API URL |
 |--------|---------|
-| United States | `https://api-us.oli.bot/api` |
-| Europe | `https://api-eu.oli.bot/api` |
-| Asia | `https://api-asia.oli.bot/api` |
+| United States | `https://api-us.clientproxy.io/api` |
+| Europe | `https://api-eu.clientproxy.io/api` |
+| Asia | `https://api-asia.clientproxy.io/api` |
 
 ## Installation
 
@@ -54,7 +54,7 @@ For arm64 replace `amd64` with `arm64` in the filename.
 **Configure** `/etc/tunnel-client/env`:
 
 ```ini
-TUNNEL_API_URL=https://api-us.oli.bot/api
+TUNNEL_API_URL=https://api-us.clientproxy.io/api
 TUNNEL_ID=<YOUR_TUNNEL_ID>
 TUNNEL_API_KEY=<YOUR_API_KEY>
 ```
@@ -117,9 +117,9 @@ Edit `C:\ProgramData\OliBot\tunnel-client\env.conf`:
 
 ```ini
 # API endpoint — choose your region:
-TUNNEL_API_URL=https://api-us.oli.bot/api
-# TUNNEL_API_URL=https://api-eu.oli.bot/api
-# TUNNEL_API_URL=https://api-asia.oli.bot/api
+TUNNEL_API_URL=https://api-us.clientproxy.io/api
+# TUNNEL_API_URL=https://api-eu.clientproxy.io/api
+# TUNNEL_API_URL=https://api-asia.clientproxy.io/api
 
 TUNNEL_ID=<YOUR_TUNNEL_ID>
 TUNNEL_API_KEY=<YOUR_API_KEY>
@@ -192,7 +192,7 @@ rustup target add x86_64-pc-windows-gnu
 
 ## Protocol
 
-Uses the oli.bot tunnel protocol v2 — a binary multiplexed framing protocol over TLS (or plain TCP with `--no-tls`). Frame header: 10 bytes (`type | stream_id | flags | length`, big-endian).
+Uses the clientproxy.io tunnel protocol v2 — a binary multiplexed framing protocol over TLS (or plain TCP with `--no-tls`). Frame header: 10 bytes (`type | stream_id | flags | length`, big-endian).
 
 ## License
 

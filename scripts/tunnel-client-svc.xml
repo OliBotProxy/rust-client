@@ -1,0 +1,23 @@
+<service>
+  <id>tunnel-client</id>
+  <name>clientproxy.io Tunnel Client</name>
+  <description>Exposes local backends through the clientproxy.io reverse proxy tunnel.</description>
+  <executable>%BASE%\tunnel-client.exe</executable>
+  <arguments>--api-url %TUNNEL_API_URL% --tunnel-id %TUNNEL_ID% --api-key %TUNNEL_API_KEY%</arguments>
+  <env name="TUNNEL_API_URL" value="%TUNNEL_API_URL%"/>
+  <env name="TUNNEL_ID" value="%TUNNEL_ID%"/>
+  <env name="TUNNEL_API_KEY" value="%TUNNEL_API_KEY%"/>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>3</keepFiles>
+  </log>
+  <resetFailureAfter>60</resetFailureAfter>
+  <failureActions>
+    <action type="restart" delay="5000"/>
+    <action type="restart" delay="5000"/>
+    <action type="restart" delay="5000"/>
+  </failureActions>
+  <startmode>Automatic</startmode>
+  <waithint>15000</waithint>
+  <sleeptime>5000</sleeptime>
+</service>

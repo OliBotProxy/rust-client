@@ -12,7 +12,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="0.9.3"
+VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
 TARGET="x86_64-pc-windows-gnu"
 WINSW_VERSION="3.0.0-alpha.11"
 WINSW_URL="https://github.com/winsw/winsw/releases/download/v${WINSW_VERSION}/WinSW-x64.exe"
@@ -57,36 +57,10 @@ cp "target/${TARGET}/release/tunnel-client.exe" "$OUT_DIR/"
 cp "$WINSW_EXE" "$OUT_DIR/tunnel-client-svc.exe"
 cp "scripts/windows-install.ps1"   "$OUT_DIR/install.ps1"
 cp "scripts/windows-uninstall.ps1" "$OUT_DIR/uninstall.ps1"
-
-# WinSW XML config (placed next to tunnel-client-svc.exe)
-cat > "$OUT_DIR/tunnel-client-svc.xml" <<'EOF'
-<service>
-  <id>tunnel-client</id>
-  <name>Oli.bot Tunnel Client</name>
-  <description>Exposes local backends through the Oli.bot reverse proxy tunnel.</description>
-  <executable>%BASE%\tunnel-client.exe</executable>
-  <arguments>--api-url %TUNNEL_API_URL% --tunnel-id %TUNNEL_ID% --api-key %TUNNEL_API_KEY%</arguments>
-  <env name="TUNNEL_API_URL"  value="%TUNNEL_API_URL%"/>
-  <env name="TUNNEL_ID"       value="%TUNNEL_ID%"/>
-  <env name="TUNNEL_API_KEY"  value="%TUNNEL_API_KEY%"/>
-  <log mode="roll-by-size">
-    <sizeThreshold>10240</sizeThreshold>
-    <keepFiles>3</keepFiles>
-  </log>
-  <resetFailureAfter>60</resetFailureAfter>
-  <failureActions>
-    <action type="restart" delay="5000"/>
-    <action type="restart" delay="5000"/>
-    <action type="restart" delay="5000"/>
-  </failureActions>
-  <startmode>Automatic</startmode>
-  <waithint>15000</waithint>
-  <sleeptime>5000</sleeptime>
-</service>
-EOF
+cp "scripts/tunnel-client-svc.xml" "$OUT_DIR/"
 
 cat > "$OUT_DIR/README.txt" <<EOF
-Oli.bot Tunnel Client ${VERSION} — Windows
+clientproxy.io Tunnel Client ${VERSION} — Windows
 ==========================================
 
 INSTALL (run PowerShell as Administrator):
@@ -101,7 +75,7 @@ LOGS:
 UNINSTALL:
   Right-click uninstall.ps1 → "Run with PowerShell"
 
-For help: https://oli.bot/docs
+For help: https://clientproxy.io/docs
 EOF
 
 rm -f "${ZIP_NAME}"

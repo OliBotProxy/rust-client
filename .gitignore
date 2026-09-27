@@ -3,3 +3,4 @@
 *.zip
 tunnel-client_*
 tunnel-client-*
+!scripts/tunnel-client-svc.xml

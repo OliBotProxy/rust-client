@@ -135,7 +135,7 @@ jobs:
 
           ARCH=${{ matrix.arch }}
           VER=${{ steps.ver.outputs.num }}
-          DESC="Oli.bot tunnel client — expose local backends through a secure reverse-proxy tunnel"
+          DESC="clientproxy.io tunnel client — expose local backends through a secure reverse-proxy tunnel"
 
           mkdir -p pkg/usr/local/bin pkg/lib/systemd/system
           cp bin/tunnel-client               pkg/usr/local/bin/
@@ -146,7 +146,7 @@ jobs:
             -n tunnel-client -v "$VER" \
             --architecture "$ARCH" \
             --depends ca-certificates \
-            --maintainer "Oli.bot <info@oli.bot>" \
+            --maintainer "clientproxy.io <info@clientproxy.io>" \
             --description "$DESC" \
             --after-install  scripts/postinst-tunnel-client.sh \
             --before-remove  scripts/prerm-tunnel-client.sh \
@@ -160,7 +160,7 @@ jobs:
             -n tunnel-client -v "$VER" \
             --architecture "$ARCH" \
             --depends ca-certificates \
-            --maintainer "Oli.bot <info@oli.bot>" \
+            --maintainer "clientproxy.io <info@clientproxy.io>" \
             --description "$DESC" \
             --after-install  scripts/postinst-tunnel-client.sh \
             --before-remove  scripts/prerm-tunnel-client.sh \
@@ -187,6 +187,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Get version
         id: ver
         run: |
@@ -219,9 +221,15 @@ jobs:
           # Linux raw binaries
           mv binaries/binary-amd64/tunnel-client   release/tunnel-client-linux-amd64  2>/dev/null || true
           mv binaries/binary-arm64/tunnel-client   release/tunnel-client-linux-arm64  2>/dev/null || true
-          # Windows zip
-          cp binaries/binary-windows-amd64/tunnel-client.exe tunnel-client.exe
-          zip "release/tunnel-client_${VER}_windows-amd64.zip" tunnel-client.exe
+          # Windows installer zip, including service wrapper and configuration migration.
+          mkdir -p windows-package
+          cp binaries/binary-windows-amd64/tunnel-client.exe windows-package/
+          cp scripts/windows-install.ps1 windows-package/install.ps1
+          cp scripts/windows-uninstall.ps1 windows-package/uninstall.ps1
+          cp scripts/tunnel-client-svc.xml windows-package/
+          curl -fsSL "https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-x64.exe" \
+            -o windows-package/tunnel-client-svc.exe
+          (cd windows-package && zip -q -r "../release/tunnel-client-windows-${VER}.zip" .)
           ls -lh release/
 
       - name: Create Release
