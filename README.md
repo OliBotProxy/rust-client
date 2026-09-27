@@ -187,8 +187,7 @@ Or use [docker/docker-compose.yml](docker/docker-compose.yml) with any compose U
 
 `--network host` lets dashboard backends like `localhost:8080` reach services on the host. With bridge networking, use the host's LAN IP or another container's name in the dashboard instead.
 
-**Unraid:** Docker → Add Container → Template URL:
-`https://raw.githubusercontent.com/OliBotProxy/rust-client/main/packaging/unraid/tunnel-client.xml`
+**Unraid:** Docker → Add Container. Set Repository to `ghcr.io/olibotproxy/tunnel-client:latest` and Network Type to **Host**, then add the variables `TUNNEL_API_URL`, `TUNNEL_ID` and `TUNNEL_API_KEY`. A Community Applications template is in [packaging/unraid/tunnel-client.xml](packaging/unraid/tunnel-client.xml).
 
 **Build the image yourself:** `docker build -t tunnel-client .`
 
