@@ -1,5 +1,7 @@
 # tunnel-client
 
+Project has moved to https://github.com/clientproxy-io/tunnel-client
+
 The open-source client binary for [clientproxy.io](https://clientproxy.io) — expose any local HTTP server to the internet through a secure reverse-proxy tunnel, with no port forwarding required.
 
 Works on Linux, macOS, Windows, NAS devices (Synology package, Docker for QNAP / TrueNAS / Unraid / OpenMediaVault), and (with `--no-tls`) ESP32 / constrained embedded devices.
